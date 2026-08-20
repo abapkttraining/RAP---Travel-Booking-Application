@@ -1,0 +1,23 @@
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Projection view for the booking suppliment entity'
+@Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
+define view entity ZAT_CV_SUPPLIMENT
+  as projection on ZAT_I_SUPPLIMENT
+{
+  key TravelId,
+  key BookingId,
+  key BookingSupplementId,
+      @ObjectModel.text.element: ['SupplimentDesc']
+      SupplementId,
+      _SupplTxt.Description as SupplimentDesc : localized,
+      Price,
+      @Semantics.currencyCode: true
+      CurrencyCode,
+      LastChangedAt,
+      /* Associations */
+      _Booking : redirected to parent ZAT_CV_BOOKING,
+      _Suppl,
+      _SupplTxt,
+      _Travel : redirected to ZAT_CV_TRAVEL
+}

@@ -1,0 +1,32 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'interface for boking Suppliments'
+@Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
+@ObjectModel.usageType:{
+    serviceQuality: #X,
+    sizeCategory: #S,
+    dataClass: #MIXED
+}
+define view entity ZAT_I_SUPPLIMENT
+  as select from zat_suppliment
+  association        to parent ZAT_I_BOOKING  as _Booking  on  $projection.TravelId  = _Booking.TravelId
+                                                           and $projection.BookingId = _Booking.BookingId
+  association [1..1] to ZAT_I_TRAVEL          as _Travel   on  $projection.TravelId = _Travel.TravelId
+  association [1..1] to /DMO/I_Supplement     as _Suppl    on  $projection.BookingSupplementId = _Suppl.SupplementID
+  association [1..*] to /DMO/I_SupplementText as _SupplTxt on  $projection.BookingSupplementId = _SupplTxt.SupplementID
+
+{
+  key travel_id             as TravelId,
+  key booking_id            as BookingId,
+  key booking_supplement_id as BookingSupplementId,
+      supplement_id         as SupplementId,
+      @Semantics.amount.currencyCode: 'CurrencyCode'
+      price                 as Price,
+      currency_code         as CurrencyCode,
+      last_changed_at       as LastChangedAt,
+      _Suppl,
+      _SupplTxt,
+      _Booking,
+      _Travel
+}

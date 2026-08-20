@@ -1,0 +1,224 @@
+CLASS lhc_ZAT_I_TRAVEL DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+
+    METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION
+      IMPORTING keys REQUEST requested_authorizations FOR zat_i_travel RESULT result.
+
+    METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
+      IMPORTING REQUEST requested_authorizations FOR zat_i_travel RESULT result.
+
+    METHODS earlynumbering_create FOR NUMBERING
+      IMPORTING entities FOR CREATE zat_i_travel.
+
+    METHODS earlynumbering_cba_Booking FOR NUMBERING
+      IMPORTING entities FOR CREATE zat_i_travel\_Booking.
+
+    METHODS copytravel FOR MODIFY
+      IMPORTING keys FOR ACTION zat_i_travel~copytravel.
+
+    METHODS accepttravel FOR MODIFY
+      IMPORTING keys FOR ACTION zat_i_travel~accepttravel RESULT result.
+
+    METHODS rejecttravel FOR MODIFY
+      IMPORTING keys FOR ACTION zat_i_travel~rejecttravel RESULT result.
+
+    METHODS get_instance_features FOR INSTANCE FEATURES
+      keys REQUEST requested_features FOR zat_i_travel RESULT result.
+
+ENDCLASS.
+
+CLASS lhc_ZAT_I_TRAVEL IMPLEMENTATION.
+
+  METHOD get_instance_authorizations.
+    " Loop through incoming keys and authorize them by default for testing
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<fs_key>).
+      APPEND VALUE #(
+          %tky = <fs_key>-%tky
+          %update = if_abap_behv=>auth-allowed
+          %delete = if_abap_behv=>auth-allowed
+      ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD get_global_authorizations.
+    result-%create = if_abap_behv=>auth-allowed.
+*    result-%update = if_abap_behv=>auth-allowed.
+*    result-%delete = if_abap_behv=>auth-allowed.
+  ENDMETHOD.
+
+  METHOD earlynumbering_create.
+    DATA(lt_entity) = entities.
+    DELETE lt_entity WHERE travelId IS NOT INITIAL.
+    LOOP AT entities ASSIGNING FIELD-SYMBOL(<fs_entity>).
+      IF <fs_entity>-travelid IS INITIAL. " Skip if a key is already assigned (e.g., draft scenarios where key persists)
+        TRY.
+            " 2. Call the RAP-compliant Number Range API
+            cl_numberrange_runtime=>number_get(
+                EXPORTING
+                    nr_range_nr = '01'
+                    object = '/DMO/trv_m'
+                IMPORTING
+                    number = DATA(lv_nr_number)
+             ).
+            " 3. Map the generated key back to the framework
+            APPEND VALUE #( %cid = <fs_entity>-%cid
+                            travelId = |{ lv_nr_number ALPHA = OUT }| ) TO mapped-zat_i_travel.
+          CATCH cx_number_ranges INTO DATA(lx_number_range).
+            APPEND VALUE #( %cid      = <fs_entity>-%cid
+                            %fail     = VALUE #( cause = if_abap_behv=>cause-unspecific )
+                      ) TO failed-zat_i_travel.
+
+            APPEND VALUE #( %cid      = <fs_entity>-%cid
+                            %msg      = lx_number_range
+                          ) TO reported-zat_i_travel.
+        ENDTRY.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD earlynumbering_cba_Booking.
+    DATA: lv_max_booking_id TYPE /dmo/booking_id.
+    LOOP AT entities ASSIGNING FIELD-SYMBOL(<ls_travel_entity>).
+
+      " 1. Find the highest existing booking ID on the active database for this Travel ID
+      SELECT MAX( booking_id ) FROM zat_booking_m
+        WHERE travel_id = @<ls_travel_entity>-TravelId
+        INTO @lv_max_booking_id.
+
+      " 2. Process all new bookings belonging to this Travel header
+      LOOP AT <ls_travel_entity>-%target ASSIGNING FIELD-SYMBOL(<ls_new_booking>).
+
+        " Increment the ID sequentially for each new item
+        lv_max_booking_id += 1.
+
+        " 3. Map the generated key back to the RAP framework
+        APPEND VALUE #(
+          %cid      = <ls_new_booking>-%cid
+          %key      = VALUE #(
+            TravelId  = <ls_travel_entity>-TravelId
+            BookingId = lv_max_booking_id
+          )
+        ) TO mapped-zat_i_booking. " Entity name must match your BDEF definition in lowercase
+
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD copyTravel.
+    DATA: lt_travel     TYPE TABLE FOR CREATE zat_i_travel,
+          lt_booking    TYPE TABLE FOR CREATE zat_i_travel\_Booking,
+          lt_supplement TYPE TABLE FOR CREATE zat_i_booking\_Suppl.
+*read keys to check if %cid is filled
+    READ TABLE keys ASSIGNING FIELD-SYMBOL(<fs_key_b>) WITH KEY %cid = ' '.
+    ASSERT <fs_key_b> IS NOT ASSIGNED.
+
+*read all the active data for the travel id from the entity
+    READ ENTITY IN LOCAL MODE zat_i_travel ALL FIELDS WITH CORRESPONDING #( keys ) RESULT DATA(lt_travel_res).
+    READ ENTITY IN LOCAL MODE zat_i_travel BY \_booking ALL FIELDS WITH CORRESPONDING #( lt_travel_res ) RESULT DATA(lt_booking_res).
+    READ ENTITY IN LOCAL MODE  zat_i_booking BY \_Suppl ALL FIELDS WITH CORRESPONDING #( lt_booking_res ) RESULT DATA(lt_suppliment_res).
+    LOOP AT lt_travel_res ASSIGNING FIELD-SYMBOL(<fs_travel_res>).
+      APPEND VALUE #( %cid = keys[ KEY entity TravelId = <fs_travel_res>-TravelId ]-%cid
+                      %data = CORRESPONDING #( <fs_travel_res> EXCEPT travelId ) )
+                      TO lt_travel ASSIGNING FIELD-SYMBOL(<fs_travel>) .
+      <fs_travel>-BeginDate = cl_abap_context_info=>get_system_date( ).
+      <fs_travel>-EndDate = cl_abap_context_info=>get_system_date( ) + 30.
+      <fs_travel>-OverallStatus = 'O'.
+
+      APPEND VALUE #( %cid_ref = <fs_travel>-%cid ) TO lt_booking ASSIGNING FIELD-SYMBOL(<fs_booking>).
+      LOOP AT lt_booking_res ASSIGNING FIELD-SYMBOL(<fs_booking_r>).
+*       fill cid and other required data
+        APPEND VALUE #( %cid = <fs_travel>-%cid && <fs_booking_r>-BookingId
+                        %data = CORRESPONDING #( <fs_booking_r> EXCEPT BookingId travelID ) )
+                      TO <fs_booking>-%target ASSIGNING FIELD-SYMBOL(<fs_booking_n>).
+        <fs_booking_n>-BookingStatus = 'N'.
+
+        APPEND VALUE #( %cid_ref = <fs_booking_n>-%cid ) TO lt_supplement ASSIGNING FIELD-SYMBOL(<fs_supp>).
+
+        LOOP AT lt_suppliment_res ASSIGNING FIELD-SYMBOL(<fs_supp_r>) WHERE BookingId = <fs_booking_r>-BookingId .
+          APPEND VALUE #( %cid = <fs_travel>-%cid && <fs_booking_r>-BookingId && <fs_supp_r>-BookingSupplementId
+                           %data = CORRESPONDING #( <fs_supp_r> EXCEPT TravelId BookingId BookingSupplementId ) )
+          TO <fs_supp>-%target ASSIGNING FIELD-SYMBOL(<fs_supp_n>).
+        ENDLOOP.
+      ENDLOOP.
+
+    ENDLOOP.
+
+*    Modify entity, no need to pass the any primary keys it will generate from numbering methods
+    MODIFY ENTITIES OF zat_i_travel IN LOCAL MODE
+        ENTITY zat_i_travel
+        CREATE FIELDS ( AgencyId CustomerId BeginDate EndDate BookingFee TotalPrice CurrencyCode OverallStatus Description )
+        WITH lt_travel
+        ENTITY zat_i_travel
+        CREATE BY \_Booking
+        FIELDS ( BookingDate CustomerId CarrierId ConnectionId FlightDate FlightPrice CurrencyCode BookingStatus )
+        WITH lt_booking
+         ENTITY zat_I_booking
+        CREATE BY \_Suppl FIELDS ( SupplementId Price CurrencyCode )
+         WITH lt_supplement
+        MAPPED DATA(lt_mapped).
+
+*map the cid and generate keys back, this is mandatory
+    mapped = lt_mapped.
+
+  ENDMETHOD.
+
+  METHOD acceptTravel.
+    MODIFY ENTITIES OF zat_i_travel IN LOCAL MODE
+    ENTITY zat_i_travel
+    UPDATE FIELDS (  OverallStatus )
+    WITH VALUE #( FOR ls_keys IN keys ( %tky = ls_keys-%tky
+                                        OverallStatus = 'A' ) )
+    REPORTED DATA(lt_travel).
+
+    READ ENTITIES OF zat_i_travel IN LOCAL MODE
+    ENTITY zat_i_travel
+    ALL FIELDS WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_result).
+
+    result = VALUE #( FOR ls_result IN lt_result ( %tky = ls_result-%tky
+                                              %param = ls_result ) ).
+
+  ENDMETHOD.
+
+  METHOD rejectTravel.
+    MODIFY ENTITIES OF zat_i_travel IN LOCAL MODE
+      ENTITY zat_i_travel
+      UPDATE FIELDS (  OverallStatus )
+      WITH VALUE #( FOR ls_keys IN keys ( %tky = ls_keys-%tky
+                                          OverallStatus = 'X' ) )
+      REPORTED DATA(lt_travel).
+
+    READ ENTITIES OF zat_i_travel IN LOCAL MODE
+    ENTITY zat_i_travel
+    ALL FIELDS WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_result).
+
+    result = VALUE #( FOR ls_result IN lt_result ( %tky = ls_result-%tky
+                                                   %param = ls_result ) ).
+  ENDMETHOD.
+
+  METHOD get_instance_features.
+    READ ENTITIES OF zat_i_travel IN LOCAL MODE
+    ENTITY zat_i_travel
+    FIELDS ( travelID OverallStatus )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_travel).
+
+    result = VALUE #( FOR ls_travel IN lt_travel ( %tky = ls_travel-%tky
+                                                   %features-%action-acceptTravel = COND #( WHEN ls_travel-OverallStatus = 'A'
+                                                                                            THEN if_abap_behv=>fc-o-disabled
+                                                                                            ELSE if_abap_behv=>fc-o-enabled )
+                                                   %features-%action-rejectTravel = COND #( WHEN ls_travel-OverallStatus = 'X'
+                                                                                            THEN if_abap_behv=>fc-o-disabled
+                                                                                            ELSE if_abap_behv=>fc-o-enabled )
+                                                   %features-%assoc-_Booking     = COND #( WHEN ls_travel-OverallStatus = 'X'
+                                                                                            THEN if_abap_behv=>fc-o-disabled
+                                                                                            ELSE if_abap_behv=>fc-o-enabled )
+
+                                                                                            ) ).
+
+  ENDMETHOD.
+
+ENDCLASS.

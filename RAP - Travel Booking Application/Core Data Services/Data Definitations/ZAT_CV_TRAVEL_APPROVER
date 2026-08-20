@@ -1,0 +1,25 @@
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Projection view for the approver travel entity'
+@Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
+define root view entity ZAT_CV_TRAVEL_APPROVER
+  provider contract transactional_query as projection on ZAT_I_TRAVEL
+{
+    key TravelId,
+    AgencyId,
+    CustomerId,
+    BeginDate,
+    EndDate,
+    BookingFee,
+    TotalPrice,
+    @Semantics.currencyCode: true
+    CurrencyCode,
+    Description,
+    OverallStatus,
+    /* Associations */
+    _Agency,
+    _Booking : redirected to composition child ZAT_CV_BOOKING_APPROVER,
+    _Currency,
+    _Customer,
+    _Status
+}

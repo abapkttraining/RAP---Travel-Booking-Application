@@ -1,0 +1,10 @@
+projection;
+strict ( 2 );
+
+define behavior for ZAT_CV_TRAVEL_APPROVER //alias <alias_name>
+{
+  use update;
+  use action acceptTravel;
+  use action rejectTravel;
+
+}
