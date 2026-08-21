@@ -1,0 +1,6 @@
+@EndUserText.label: 'Service definitation for travel agency cds view entity'
+define service ZAT_SRV_TRAVEL_AGENCY {
+  expose ZAT_CV_TRAVEL;
+  expose ZAT_CV_BOOKING;
+  expose ZAT_CV_SUPPLIMENT;
+}
