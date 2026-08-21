@@ -1,0 +1,5 @@
+@EndUserText.label: 'Service definitation for travel approver'
+define service ZAT_SRV_TRAVEL_APPROVER {
+  expose ZAT_CV_TRAVEL_APPROVER;
+  expose ZAT_CV_BOOKING_APPROVER;
+}
