@@ -5,6 +5,8 @@ CLASS lhc_ZAT_I_BOOKING DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING entities FOR CREATE zat_i_booking\_Suppl.
     METHODS get_instance_features FOR INSTANCE FEATURES
       keys REQUEST requested_features FOR zat_i_booking RESULT result.
+    METHODS calculatetotalprice FOR DETERMINE ON MODIFY
+       keys FOR zat_i_booking~calculatetotalprice.
 
 *    METHODS copy FOR MODIFY
 *      IMPORTING keys FOR ACTION ZAT_I_BOOKING~copy.
@@ -61,19 +63,28 @@ CLASS lhc_ZAT_I_BOOKING IMPLEMENTATION.
                                                                                             ELSE if_abap_behv=>fc-o-enabled )
 
                                                                                             ) ).
- READ ENTITIES OF zat_i_travel IN LOCAL MODE
+    READ ENTITIES OF zat_i_travel IN LOCAL MODE
+       ENTITY zat_i_travel
+       FIELDS ( OverallStatus )
+       WITH CORRESPONDING #( keys )
+       RESULT DATA(lt_travel).
+
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<ls_res>) .
+      LOOP AT lt_travel ASSIGNING FIELD-SYMBOL(<ls_travel>).
+        <ls_res>-%features-%delete = COND #( WHEN <ls_travel>-OverallStatus = 'X' THEN if_abap_behv=>fc-o-disabled ELSE if_abap_behv=>fc-o-enabled ).
+        EXIT.
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD calculateTotalPrice.
+    DATA: lt_travel TYPE STANDARD TABLE OF  zat_i_travel WITH UNIQUE HASHED KEY Key COMPONENTS TravelId.
+    lt_travel = CORRESPONDING #( keys DISCARDING DUPLICATES MAPPING TravelId = TravelId ).
+    MODIFY ENTITIES OF zat_i_travel IN LOCAL MODE
     ENTITY zat_i_travel
-    FIELDS ( OverallStatus )
-    WITH CORRESPONDING #( keys )
-    RESULT DATA(lt_travel).
-
-    loop at result ASSIGNING FIELD-SYMBOL(<ls_res>) .
-        loop AT lt_travel assigning FIELD-SYMBOL(<ls_travel>).
-            <ls_res>-%features-%delete = cond #( when <ls_travel>-OverallStatus = 'X' then if_abap_behv=>fc-o-disabled else if_abap_behv=>fc-o-enabled ).
-            exit.
-        endloop.
-    endloop.
-
+    EXECUTE recacltotalprice
+    FROM CORRESPONDING #( lt_travel ).
   ENDMETHOD.
 
 ENDCLASS.

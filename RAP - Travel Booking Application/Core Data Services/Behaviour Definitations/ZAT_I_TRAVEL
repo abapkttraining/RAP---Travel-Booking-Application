@@ -15,11 +15,11 @@ early numbering
   action ( features : instance ) acceptTravel result [1] $self;
   action ( features : instance ) rejectTravel result [1] $self;
   factory action copyTravel [1];
-  //  field ( mandatory ) TravelId;
   field ( readonly ) TravelId, LastChangedBy, LastChangedAt, CreatedAt, CreatedBy;
   field ( mandatory : create ) AgencyId, CustomerId, BeginDate, EndDate, OverallStatus, BookingFee, CurrencyCode;
-    association _Booking { create ( features : instance ); }
-//  association _Booking { }
+  association _Booking { create ( features : instance ); }
+  internal action recacltotalprice;
+  determination calculateTotalPrice on modify { create; field BookingFee, CurrencyCode; }
   mapping for zat_travel_m
     {
       AgencyId      = agency_id;
@@ -48,12 +48,14 @@ etag master LastChangedAt
 early numbering
 {
   update;
-  delete (features : instance);
+  delete ( features : instance );
   field ( readonly ) TravelId, BookingId;
   association _Travel;
   field ( mandatory : create ) CarrierID, ConnectionId, FlightDate, BookingStatus;
   field ( readonly : update ) BookingDate, CustomerId;
   association _Suppl { create ( features : instance ); }
+  determination calculateTotalPrice on modify { create; field FlightPrice, CurrencyCode; }
+
   mapping for zat_booking_m
     {
       BookingDate   = booking_date;
@@ -72,6 +74,7 @@ early numbering
 }
 
 define behavior for ZAT_I_SUPPLIMENT //alias <alias_name>
+implementation in class zcl_at_i_suppliment unique
 persistent table zat_suppliment
 lock dependent by _Travel
 authorization dependent by _Travel
@@ -84,6 +87,7 @@ early numbering
   field ( mandatory ) Price, SupplementId;
   association _Travel;
   association _Booking;
+  determination calculateTotalPrice on modify { create; field Price, CurrencyCode; }
   mapping for zat_suppliment
     {
       BookingId           = booking_id;

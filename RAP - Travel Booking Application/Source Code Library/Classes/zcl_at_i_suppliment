@@ -1,0 +1,22 @@
+CLASS lhc_ZAT_I_SUPPLIMENT DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+
+    METHODS calculateTotalPrice FOR DETERMINE ON MODIFY
+       keys FOR zat_i_suppliment~calculateTotalPrice.
+
+ENDCLASS.
+
+CLASS lhc_ZAT_I_SUPPLIMENT IMPLEMENTATION.
+
+  METHOD calculateTotalPrice.
+    DATA: lt_travel TYPE STANDARD TABLE OF zat_i_travel WITH UNIQUE HASHED KEY key COMPONENTS TravelId.
+
+    Lt_travel = CORRESPONDING #( keys DISCARDING DUPLICATES MAPPING TravelId = TravelId ).
+
+    MODIFY ENTITIES OF zat_i_travel IN LOCAL MODE
+    ENTITY zat_i_travel
+    EXECUTE recacltotalprice
+    FROM CORRESPONDING #( lt_travel ).
+  ENDMETHOD.
+
+ENDCLASS.
