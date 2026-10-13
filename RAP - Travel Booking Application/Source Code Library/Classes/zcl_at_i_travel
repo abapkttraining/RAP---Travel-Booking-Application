@@ -1,3 +1,127 @@
+CLASS lsc_zat_i_travel DEFINITION INHERITING FROM cl_abap_behavior_saver.
+
+  PROTECTED SECTION.
+
+    METHODS save_modified REDEFINITION.
+
+ENDCLASS.
+
+CLASS lsc_zat_i_travel IMPLEMENTATION.
+
+  METHOD save_modified.
+    DATA: lt_travel_log TYPE STANDARD TABLE OF zat_ylog_travel.
+    DATA: lt_travel_log_c TYPE STANDARD TABLE OF zat_ylog_travel.
+    DATA: lt_travel_log_u TYPE STANDARD TABLE OF zat_ylog_travel.
+
+**********************************************************************
+* Additional save with Managed Save for the Travel entity.
+**********************************************************************
+
+    IF create-zat_i_travel IS NOT INITIAL.
+      lt_travel_log = CORRESPONDING #( create-zat_i_travel ).
+
+      LOOP AT lt_travel_log ASSIGNING FIELD-SYMBOL(<fs_travel_log>).
+        <fs_travel_log>-changing_operation = 'CREATE'.
+        GET TIME STAMP FIELD <fs_travel_log>-created_at.
+
+        READ TABLE create-zat_i_travel ASSIGNING FIELD-SYMBOL(<fs_travel>) WITH KEY entity COMPONENTS travelID = <fs_travel_log>-travelid.
+        IF sy-subrc IS INITIAL.
+          IF <fs_travel>-%control-BookingFee = cl_abap_behv=>flag_changed.
+            <fs_travel_log>-changed_field_name = 'Booking Fee'.
+            <fs_travel_log>-changed_value = <fs_travel>-BookingFee.
+            TRY.
+                <fs_travel_log>-change_id = cl_system_uuid=>create_uuid_x16_static( ).
+              CATCH cx_uuid_error.
+                "handle exception
+            ENDTRY.
+            APPEND <fs_travel_log> TO lt_travel_log_c.
+          ENDIF.
+          IF <fs_travel>-%control-OverallStatus = cl_abap_behv=>flag_changed.
+            <fs_travel_log>-changed_field_name = 'OverallStatus'.
+            <fs_travel_log>-changed_value = <fs_travel>-OverallStatus.
+            TRY.
+                <fs_travel_log>-change_id = cl_system_uuid=>create_uuid_x16_static( ).
+              CATCH cx_uuid_error.
+                "handle exception
+            ENDTRY.
+            APPEND <fs_travel_log> TO lt_travel_log_c.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+      INSERT zat_ylog_travel FROM TABLE @lt_travel_log_c.
+    ENDIF.
+    IF update-zat_i_travel IS NOT INITIAL.
+      lt_travel_log = CORRESPONDING #( update-zat_i_travel ).
+      LOOP AT update-zat_i_travel ASSIGNING FIELD-SYMBOL(<ls_log_update>).
+        ASSIGN lt_travel_log[ travelid = <ls_log_update>-travelid ] TO FIELD-SYMBOL(<ls_log_u>).
+        <ls_log_u>-changing_operation = 'UPDATE'.
+        GET TIME STAMP FIELD <ls_log_u>-created_at.
+        IF <ls_log_update>-%control-customerid = if_abap_behv=>mk-on.
+          <ls_log_u>-changed_value = <ls_log_update>-customerid.
+          TRY.
+              <ls_log_u>-change_id = cl_system_uuid=>create_uuid_x16_static( ) .
+            CATCH Cx_uuid_error.
+          ENDTRY.
+          <ls_log_u>-changed_field_name = 'customer_id'.
+          APPEND <ls_log_u> TO lt_travel_log_u.
+        ENDIF.
+        IF <ls_log_update>-%control-description = if_abap_behv=>mk-on.
+          <ls_log_u>-changed_value = <ls_log_update>-description.
+          TRY.
+              <ls_log_u>-change_id = cl_system_uuid=>create_uuid_x16_static( ).
+            CATCH Cx_uuid_error.
+          ENDTRY.
+          <ls_log_u>-changed_field_name = 'description'.
+          APPEND <ls_log_u> TO lt_travel_log_u.
+        ENDIF.
+      ENDLOOP.
+      INSERT zat_ylog_travel FROM TABLE @lt_travel_log_u.
+    ENDIF.
+    IF delete-zat_i_travel IS NOT INITIAL.
+    ENDIF.
+
+
+**********************************************************************
+* Unmanaged save for the Booking Supplement entity.
+**********************************************************************
+
+    DATA: lt_book_suppl TYPE STANDARD TABLE OF zat_suppliment.
+    IF create-zat_i_suppliment IS NOT INITIAL.
+      lt_book_suppl = VALUE #( FOR ls_supp IN create-zat_i_suppliment ( booking_id = ls_supp-bookingId
+                                                                        booking_supplement_id = ls_supp-BookingSupplementId
+                                                                        currency_code = ls_supp-CurrencyCode
+                                                                        last_changed_at = ls_supp-LastChangedAt
+                                                                         price  = ls_supp-price
+                                                                         supplement_id = ls_supp-SupplementId
+                                                                         travel_id = ls_supp-TravelId ) ).
+*     Insert data into Tx buffer
+      INSERT zat_suppliment FROM TABLE @lt_book_suppl.
+    ENDIF.
+    IF update-zat_i_suppliment IS NOT INITIAL.
+      lt_book_suppl = VALUE #( FOR ls_supp_u IN update-zat_i_suppliment ( booking_id = ls_supp_u-bookingId
+                                                                               booking_supplement_id = ls_supp_u-BookingSupplementId
+                                                                               currency_code = ls_supp_u-CurrencyCode
+                                                                               last_changed_at = ls_supp_u-LastChangedAt
+                                                                                price  = ls_supp_u-price
+                                                                                supplement_id = ls_supp_u-SupplementId
+                                                                                travel_id = ls_supp_u-TravelId ) ).
+*     Update data into Tx buffer
+      UPDATE zat_suppliment FROM TABLE @lt_book_suppl.
+    ENDIF.
+    IF delete-zat_i_suppliment IS NOT INITIAL.
+      lt_book_suppl = VALUE #( FOR ls_supp_d IN delete-zat_i_suppliment ( booking_id = ls_supp_d-bookingId
+                                                                                      booking_supplement_id = ls_supp_d-BookingSupplementId
+                                                                                       travel_id = ls_supp_d-TravelId ) ).
+*     Delete data from Tx buffer
+      DELETE zat_suppliment FROM TABLE @lt_book_suppl.
+    ENDIF.
+
+
+
+  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS lhc_ZAT_I_TRAVEL DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
 

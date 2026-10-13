@@ -1,9 +1,10 @@
-managed;
+managed implementation in class zcl_at_i_travel unique ;
 strict ( 2 );
 
 define behavior for ZAT_I_TRAVEL //alias <alias_name>
 implementation in class zcl_at_i_travel unique
 persistent table zat_travel_m
+with additional save
 lock master
 authorization master ( instance )
 etag master LastChangedAt
@@ -75,7 +76,8 @@ early numbering
 
 define behavior for ZAT_I_SUPPLIMENT //alias <alias_name>
 implementation in class zcl_at_i_suppliment unique
-persistent table zat_suppliment
+with unmanaged save with full data
+//persistent table zat_suppliment
 lock dependent by _Travel
 authorization dependent by _Travel
 etag master LastChangedAt
@@ -87,7 +89,7 @@ early numbering
   field ( mandatory ) Price, SupplementId;
   association _Travel;
   association _Booking;
-  determination calculateTotalPrice on modify { create; field Price, CurrencyCode; }
+  determination calculateTotalPrice on modify { create; delete; field Price, CurrencyCode; }
   mapping for zat_suppliment
     {
       BookingId           = booking_id;
